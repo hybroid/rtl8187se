@@ -213,7 +213,7 @@ inline void softmac_mgmt_xmit(struct sk_buff *skb,
 				ieee->seq_ctrl[0]++;
 
 			/* avoid watchdog triggers */
-			ieee->dev->trans_start = jiffies;
+			ieee->dev->mem_start = jiffies;
 			ieee->softmac_data_hard_start_xmit(skb,ieee->dev,ieee->basic_rate);
 		}
 
@@ -230,7 +230,7 @@ inline void softmac_mgmt_xmit(struct sk_buff *skb,
 			ieee->seq_ctrl[0]++;
 
 		/* avoid watchdog triggers */
-		ieee->dev->trans_start = jiffies;
+		ieee->dev->mem_start = jiffies;
 		ieee->softmac_hard_start_xmit(skb,ieee->dev);
 
 		spin_unlock_irqrestore(&ieee->mgmt_tx_lock, flags);
@@ -257,7 +257,7 @@ inline void softmac_ps_mgmt_xmit(struct sk_buff *skb,
 			ieee->seq_ctrl[0]++;
 
 		/* avoid watchdog triggers */
-		ieee->dev->trans_start = jiffies;
+		ieee->dev->mem_start = jiffies;
 		ieee->softmac_data_hard_start_xmit(skb,ieee->dev,ieee->basic_rate);
 
 	}else{
@@ -270,7 +270,7 @@ inline void softmac_ps_mgmt_xmit(struct sk_buff *skb,
 			ieee->seq_ctrl[0]++;
 
 		/* avoid watchdog triggers */
-		ieee->dev->trans_start = jiffies;
+		ieee->dev->mem_start = jiffies;
 		ieee->softmac_hard_start_xmit(skb,ieee->dev);
 
 	}
@@ -1623,7 +1623,7 @@ static short ieee80211_sta_ps_sleep(struct ieee80211_device *ieee, u32 *time_h,
 	if(dtim & ((IEEE80211_DTIM_UCAST | IEEE80211_DTIM_MBCAST)& ieee->ps))
 		return 2;
 
-	if(!time_after(jiffies, ieee->dev->trans_start + MSECS(timeout)))
+	if(!time_after(jiffies, ieee->dev->mem_start + MSECS(timeout)))
 		return 0;
 
 	if(!time_after(jiffies, ieee->last_rx_ps_time + MSECS(timeout)))
@@ -2005,7 +2005,7 @@ void ieee80211_softmac_xmit(struct ieee80211_txb *txb,
 				//(i+1)<txb->nr_frags);
 			ieee->stats.tx_packets++;
 			ieee->stats.tx_bytes += txb->fragments[i]->len;
-			ieee->dev->trans_start = jiffies;
+			ieee->dev->mem_start = jiffies;
 		}
 	}
 
@@ -2032,7 +2032,7 @@ static void ieee80211_resume_tx(struct ieee80211_device *ieee)
 				ieee->dev,ieee->rate);
 				//(i+1)<ieee->tx_pending.txb->nr_frags);
 			ieee->stats.tx_packets++;
-			ieee->dev->trans_start = jiffies;
+			ieee->dev->mem_start = jiffies;
 		}
 	}
 

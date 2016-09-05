@@ -22,6 +22,7 @@
 
 #include <linux/crypto.h>
 #include <linux/scatterlist.h>
+#include <crypto/hash.h>
 #include <linux/crc32.h>
 
 MODULE_AUTHOR("Jouni Malinen");
@@ -53,9 +54,9 @@ struct ieee80211_tkip_data {
 	int key_idx;
 
 	struct crypto_blkcipher *rx_tfm_arc4;
-	struct crypto_hash *rx_tfm_michael;
+	struct crypto_ahash *rx_tfm_michael;
 	struct crypto_blkcipher *tx_tfm_arc4;
-	struct crypto_hash *tx_tfm_michael;
+	struct crypto_ahash *tx_tfm_michael;
 	struct crypto_tfm *tfm_arc4;
 	struct crypto_tfm *tfm_michael;
 
@@ -81,7 +82,7 @@ static void *ieee80211_tkip_init(int key_idx)
 		goto fail;
 	}
 
-	priv->tx_tfm_michael = crypto_alloc_hash("michael_mic", 0,
+	priv->tx_tfm_michael = crypto_alloc_ahash("michael_mic", 0,
 						 CRYPTO_ALG_ASYNC);
 	if (IS_ERR(priv->tx_tfm_michael)) {
 		printk(KERN_DEBUG "ieee80211_crypt_tkip: could not allocate "
@@ -99,7 +100,7 @@ static void *ieee80211_tkip_init(int key_idx)
 		goto fail;
 	}
 
-	priv->rx_tfm_michael = crypto_alloc_hash("michael_mic", 0,
+	priv->rx_tfm_michael = crypto_alloc_ahash("michael_mic", 0,
 						 CRYPTO_ALG_ASYNC);
 	if (IS_ERR(priv->rx_tfm_michael)) {
 		printk(KERN_DEBUG "ieee80211_crypt_tkip: could not allocate "
@@ -113,11 +114,11 @@ static void *ieee80211_tkip_init(int key_idx)
 fail:
 	if (priv) {
 		if (priv->tx_tfm_michael)
-			crypto_free_hash(priv->tx_tfm_michael);
+			crypto_free_ahash(priv->tx_tfm_michael);
 		if (priv->tx_tfm_arc4)
 			crypto_free_blkcipher(priv->tx_tfm_arc4);
 		if (priv->rx_tfm_michael)
-			crypto_free_hash(priv->rx_tfm_michael);
+			crypto_free_ahash(priv->rx_tfm_michael);
 		if (priv->rx_tfm_arc4)
 			crypto_free_blkcipher(priv->rx_tfm_arc4);
 		kfree(priv);
@@ -133,11 +134,11 @@ static void ieee80211_tkip_deinit(void *priv)
 
 	if (_priv) {
 		if (_priv->tx_tfm_michael)
-			crypto_free_hash(_priv->tx_tfm_michael);
+			crypto_free_ahash(_priv->tx_tfm_michael);
 		if (_priv->tx_tfm_arc4)
 			crypto_free_blkcipher(_priv->tx_tfm_arc4);
 		if (_priv->rx_tfm_michael)
-			crypto_free_hash(_priv->rx_tfm_michael);
+			crypto_free_ahash(_priv->rx_tfm_michael);
 		if (_priv->rx_tfm_arc4)
 			crypto_free_blkcipher(_priv->rx_tfm_arc4);
 	}
@@ -465,11 +466,12 @@ static int ieee80211_tkip_decrypt(struct sk_buff *skb, int hdr_len, void *priv)
 	return keyidx;
 }
 
-static int michael_mic(struct crypto_hash *tfm_michael, u8 *key, u8 *hdr,
+static int michael_mic(struct crypto_ahash *tfm_michael, u8 *key, u8 *hdr,
 			u8 *data, size_t data_len, u8 *mic)
 {
-	struct hash_desc desc;
+	AHASH_REQUEST_ON_STACK(req, tfm_michael);
 	struct scatterlist sg[2];
+	int err;
 
 	if (tfm_michael == NULL) {
 		printk(KERN_WARNING "michael_mic: tfm_michael == NULL\n");
@@ -480,12 +482,15 @@ static int michael_mic(struct crypto_hash *tfm_michael, u8 *key, u8 *hdr,
 	sg_set_buf(&sg[0], hdr, 16);
 	sg_set_buf(&sg[1], data, data_len);
 
-	if (crypto_hash_setkey(tfm_michael, key, 8))
+	if (crypto_ahash_setkey(tfm_michael, key, 8))
 		return -1;
 
-	desc.tfm = tfm_michael;
-	desc.flags = 0;
-	return crypto_hash_digest(&desc, sg, data_len + 16, mic);
+	ahash_request_set_tfm(req, tfm_michael);
+	ahash_request_set_callback(req, 0, NULL, NULL);
+	ahash_request_set_crypt(req, sg, mic, data_len + 16);
+	err = crypto_ahash_digest(req);
+	ahash_request_zero(req);
+	return err;
 }
 
 static void michael_mic_hdr(struct sk_buff *skb, u8 *hdr)
@@ -619,9 +624,9 @@ static int ieee80211_tkip_set_key(void *key, int len, u8 *seq, void *priv)
 {
 	struct ieee80211_tkip_data *tkey = priv;
 	int keyidx;
-	struct crypto_hash *tfm = tkey->tx_tfm_michael;
+	struct crypto_ahash *tfm = tkey->tx_tfm_michael;
 	struct crypto_blkcipher *tfm2 = tkey->tx_tfm_arc4;
-	struct crypto_hash *tfm3 = tkey->rx_tfm_michael;
+	struct crypto_ahash *tfm3 = tkey->rx_tfm_michael;
 	struct crypto_blkcipher *tfm4 = tkey->rx_tfm_arc4;
 
 	keyidx = tkey->key_idx;
