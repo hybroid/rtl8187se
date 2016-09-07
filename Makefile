@@ -5,6 +5,8 @@ EXTRA_CFLAGS += -DSW_DIG
 EXTRA_CFLAGS += -DRATE_ADAPT
 EXTRA_CFLAGS += -DENABLE_LPS
 
+PWD := $(shell pwd)
+
 ifneq ($(KERNELRELEASE),)
 	r8187se-y :=			\
 		r8180_core.o		\
@@ -29,9 +31,9 @@ else
 	KDIR ?= /lib/modules/`uname -r`/build
 
 default:
-	$(MAKE) -C $(KDIR) M=$$PWD modules
+	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 clean:
-	rm -rf ieee80211/*.o ieee80211/.*.cmd *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions modules.order Module.symvers
+	$(MAKE) -O $(PWD) -C $(KDIR) M=$(PWD) clean
 
 endif
